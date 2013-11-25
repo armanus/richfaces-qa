@@ -30,6 +30,7 @@ import static org.testng.Assert.fail;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 
 import org.jboss.arquillian.drone.api.annotation.Drone;
@@ -52,6 +53,7 @@ import org.openqa.selenium.interactions.Action;
 import org.openqa.selenium.iphone.IPhoneDriver;
 import org.openqa.selenium.remote.RemoteWebDriver;
 import org.openqa.selenium.support.FindBy;
+import org.richfaces.fragment.common.Actions;
 import org.richfaces.fragment.common.Event;
 import org.richfaces.fragment.common.TextInputComponentImpl;
 import org.richfaces.fragment.common.Utils;
@@ -896,6 +898,264 @@ public abstract class AbstractWebDriverTest extends AbstractMetamerTest {
                     return context.findElement(by);
                 }
             };
+        }
+    }
+
+    protected interface Tester {
+
+        void test();
+    }
+
+    protected interface EventTester {
+
+        // testEvent("on" + e.getEventName());
+        EventTesterOn testEvent(Event e);
+
+        EventTesterOn testEvent(Event e, String attributeName);
+    }
+
+    protected interface EventTesterOn {
+
+        EventTesterBasicConfig onElement(WebElement onElement);
+    }
+
+    protected interface EventTesterBasicConfig extends Tester {
+
+        EventTesterAdvancedConfig triggerEventOnlyByJS();
+
+        EventTesterAdvancedConfig triggerEventOnlyByWD();
+
+        EventTesterAdvancedConfig triggerEventByBoth();
+    }
+
+    protected interface EventTesterAdvancedConfig extends Tester {
+
+        EventTesterAdvancedConfig addActionBefore(Action a);
+
+        EventTesterAdvancedConfig addActionAfter(Action a);
+
+        EventTesterAdvancedConfig failIfSingleFailure();
+
+        EventTesterAdvancedConfig setupTesterStrategy(TesterStrategy strategy);
+
+    }
+
+    protected interface TesterStrategy {
+
+        Action attributeSetupAction();
+
+        List<Action> actionBeforeTriggering();
+
+        Action triggeringAction();
+
+        Action checkingAction();
+
+        List<Action> actionAfterTriggering();
+
+        void perform();
+    }
+
+    private enum TestBy {
+
+        WD, JS, BOTH;
+    }
+
+    protected EventTester getEventTester() {
+        return new MetamerTesterStrategy();
+    }
+
+    private class MetamerTesterStrategy implements EventTester, EventTesterOn, EventTesterBasicConfig, EventTesterAdvancedConfig, TesterStrategy, Tester {
+
+        private final Action attributeSetupAction = new Action() {
+            @Override
+            public void perform() {
+                getUnsafeAttributes(attributeTable).set(eventAttribute, "metamerEvents += '" + eventAttribute + " '");
+            }
+        };
+        private final List<Action> actionsBefore = Lists.newArrayList();
+        private Action triggeringAction;
+        private final Action triggeringJSAction = new Action() {
+
+            @Override
+            public void perform() {
+                new Actions(driver).triggerEventByJS(event, onElement);
+            }
+        };
+        private final Action triggeringWDAction = new Action() {
+
+            @Override
+            public void perform() {
+                Actions triggerEventByWD = new Actions(driver).triggerEventByWD(event, onElement);
+                if (eventAttribute.contains("mousedown")) {
+                    triggerEventByWD.triggerEventByWD(Event.MOUSEUP, onElement);
+                }
+            }
+        };
+
+        private final Action checkAction = new Action() {
+
+            @Override
+            public void perform() {
+                String expectedReturnJS = expectedReturnJS("return metamerEvents;", eventAttribute);
+                assertEquals(expectedReturnJS, eventAttribute, "Event triggered once");
+            }
+        };
+        private final List<Action> actionsAfter = Lists.newArrayList();
+        private boolean failIfSingleFailure = false;
+        private TestBy testBy = TestBy.BOTH;
+        private TestBy actualTestBy = TestBy.JS;
+        private String eventAttribute;
+        private Event event;
+        private WebElement onElement;
+        private String attributeTable = "";
+        private RuntimeException ex;
+
+        @Override
+        public EventTesterBasicConfig onElement(WebElement onElement) {
+            this.onElement = onElement;
+            return this;
+        }
+
+        private void resetAfterTestPart() {
+            actualTestBy = TestBy.JS;
+            testBy = TestBy.BOTH;
+            actionsAfter.clear();
+            actionsBefore.clear();
+            executor.executeScript("metamerEvents = '';");
+        }
+
+        private void resetAll() {
+            resetAfterTestPart();
+            onElement = null;
+            event = null;
+            eventAttribute = null;
+            failIfSingleFailure = false;
+            attributeTable = "";
+        }
+
+        @Override
+        public List<Action> actionAfterTriggering() {
+            return Collections.unmodifiableList(actionsAfter);
+        }
+
+        @Override
+        public List<Action> actionBeforeTriggering() {
+            return Collections.unmodifiableList(actionsBefore);
+        }
+
+        @Override
+        public EventTesterAdvancedConfig addActionAfter(Action a) {
+            actionsAfter.add(a);
+            return this;
+        }
+
+        @Override
+        public EventTesterAdvancedConfig addActionBefore(Action a) {
+            actionsBefore.add(a);
+            return this;
+        }
+
+        @Override
+        public Action attributeSetupAction() {
+            return attributeSetupAction;
+        }
+
+        @Override
+        public Action checkingAction() {
+            return checkAction;
+        }
+
+        @Override
+        public EventTesterAdvancedConfig failIfSingleFailure() {
+            failIfSingleFailure = true;
+            return this;
+        }
+
+        public EventTesterBasicConfig inAttributesTable(String attTableName) {
+            this.attributeTable = attTableName;
+            return this;
+        }
+
+        @Override
+        public void perform() {
+            if (!testBy.equals(TestBy.BOTH)) {
+                actualTestBy = testBy;
+            }
+            attributeSetupAction().perform();
+            for (Action action : actionBeforeTriggering()) {
+                action.perform();
+            }
+            switch (actualTestBy) {
+                case JS:
+                    this.triggeringAction = triggeringJSAction;
+                    break;
+                case WD:
+                    this.triggeringAction = triggeringWDAction;
+                    break;
+            }
+            triggeringAction().perform();
+            try {
+                checkingAction().perform();
+            } catch (RuntimeException exc) {
+                exc.printStackTrace();
+            } finally {
+                for (Action action : actionAfterTriggering()) {
+                    action.perform();
+                }
+            }
+            if ((!testBy.equals(TestBy.BOTH) || failIfSingleFailure) && ex != null) {
+                return;
+            }
+            if (testBy.equals(TestBy.BOTH)) {
+                resetAfterTestPart();
+                actualTestBy = TestBy.WD;
+                perform();
+            }
+        }
+
+        @Override
+        public EventTesterAdvancedConfig setupTesterStrategy(TesterStrategy strategy) {
+            throw new UnsupportedOperationException("Cannot set the strategy.");
+        }
+
+        @Override
+        public void test() {
+            this.perform();
+        }
+
+        @Override
+        public EventTesterOn testEvent(Event e) {
+            return testEvent(e, "on" + e.getEventName());
+        }
+
+        @Override
+        public EventTesterOn testEvent(Event e, String attributeName) {
+            event = e;
+            eventAttribute = attributeName;
+            return this;
+        }
+
+        @Override
+        public EventTesterAdvancedConfig triggerEventByBoth() {
+            this.testBy = TestBy.BOTH;
+            return this;
+        }
+
+        @Override
+        public EventTesterAdvancedConfig triggerEventOnlyByJS() {
+            this.testBy = TestBy.JS;
+            return this;
+        }
+
+        @Override
+        public EventTesterAdvancedConfig triggerEventOnlyByWD() {
+            this.testBy = TestBy.WD;
+            return this;
+        }
+
+        @Override
+        public Action triggeringAction() {
+            return triggeringAction;
         }
     }
 }
