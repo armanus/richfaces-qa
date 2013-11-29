@@ -97,24 +97,38 @@
                 </executions>
             </plugin>
             <plugin>
+            	<groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
                 <configuration>
-                    <testFailureIgnore>true</testFailureIgnore>
-                    <suiteXmlFiles>
-                        <suiteXmlFiles>${testng.suite.xml}</suiteXmlFiles>
-                    </suiteXmlFiles>
-                    <!-- Logging configuration for Selenium -->
-                    <argLine>-Djava.util.logging.config.file=${project.build.testOutputDirectory}/logging.properties</argLine>
-                    <!-- Propagate properties from browser profiles to Arquillian -->
-                    <systemPropertyVariables>
-                        <android.serial>${android.serial}</android.serial>
-                        <android.sdk.home>${android.sdk.home}</android.sdk.home>
-                        <android.apk.version>${android.apk.version}</android.apk.version>
-                        <android.skip>${android.skip}</android.skip>
-                        <browser.capabilities>${browser.capabilities}</browser.capabilities>
-                        <showcase.layout>${showcase.layout}</showcase.layout>
-                    </systemPropertyVariables>
-                </configuration>
+		          <skip>true</skip>
+		        </configuration>
+		        <executions>
+		          <execution>
+		            <id>surefire-it</id>
+		            <phase>integration-test</phase>
+		            <goals>
+		              <goal>test</goal>
+		            </goals>
+		            <configuration>
+		              <skip>false</skip>
+		              <testFailureIgnore>true</testFailureIgnore>
+	                    <suiteXmlFiles>
+	                        <suiteXmlFiles>${testng.suite.xml}</suiteXmlFiles>
+	                    </suiteXmlFiles>
+	                    <!-- Logging configuration for Selenium -->
+	                    <argLine>-Djava.util.logging.config.file=${project.build.testOutputDirectory}/logging.properties</argLine>
+	                    <!-- Propagate properties from browser profiles to Arquillian -->
+	                    <systemPropertyVariables>
+	                        <android.serial>${android.serial}</android.serial>
+	                        <android.sdk.home>${android.sdk.home}</android.sdk.home>
+	                        <android.apk.version>${android.apk.version}</android.apk.version>
+	                        <android.skip>${android.skip}</android.skip>
+	                        <browser.capabilities>${browser.capabilities}</browser.capabilities>
+	                        <showcase.layout>${showcase.layout}</showcase.layout>
+                    	</systemPropertyVariables>
+		            </configuration>
+		          </execution>
+		        </executions>
             </plugin>
         </plugins>
     </build>

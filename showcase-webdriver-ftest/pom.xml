@@ -24,7 +24,7 @@
         <android.skip>true</android.skip>
         <opera.product>desktop</opera.product>
         <iphone.ARQ1110.workaround>false</iphone.ARQ1110.workaround>
-        <remote.address>http://localhost:14444/wd/hub</remote.address>
+        <remote.address>http://127.0.0.1:14444/wd/hub</remote.address>
     </properties>
 
     <developers>
@@ -192,6 +192,34 @@
                 <remote.address>http://localhost:3001/wd/hub</remote.address>
             </properties>
         </profile>
-
+	<profile>
+	  <id>xvfb</id>
+	  <build>
+	    	<plugin>
+		  <groupId>org.codehaus.mojo</groupId>
+		  <artifactId>selenium-maven-plugin</artifactId>
+		  <version>${version.selenium}</version>
+		  <executions>
+		    <execution>
+		      <id>xvfb</id>
+		      <phase>pre-integration-test</phase>
+		      <goals>
+			<goal>xvfb</goal>
+		      </goals>
+		    </execution>
+		    <execution>
+		      <id>selenium</id>
+		      <phase>pre-integration-test</phase>
+		      <goals>
+			<goal>start-server</goal>
+		      </goals>
+		      <configuration>
+			<background>true</background>
+		      </configuration>
+		    </execution>
+		  </executions>
+		</plugin>
+	  </build>
+	</profile>
     </profiles>
 </project>
